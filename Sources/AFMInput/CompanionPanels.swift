@@ -521,8 +521,8 @@ final class ModeIndicator {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9, execute: task)
     }
 
-    /// 定位: 当前光标上方(优先,放不下翻到下方);光标不可用(未打字就切模式)时跟随鼠标位置;
-    /// 再兜底候选条上缘 → 屏幕中心。全程钳在可见区
+    /// 定位: 以当前窗口输入框焦点(caret rect)为锚——上方优先,放不下翻到下方;
+    /// 焦点 rect 不可用时兜底候选条上缘 → 屏幕中心。不用鼠标位置当锚(焦点≠鼠标)
     private func positionNearCaret(_ panel: NSPanel) {
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
@@ -531,18 +531,12 @@ final class ModeIndicator {
         var anchor: NSPoint
         var gap: CGFloat = 12
         if !caret.isNull, caret.width > 0, caret.height > 0 {
-            anchor = NSPoint(x: caret.midX, y: caret.minY) // 光标底部(上方 gap 处)
+            anchor = NSPoint(x: caret.midX, y: caret.minY) // 输入框焦点底部(上方 gap 处)
         } else {
-            let mouse = NSEvent.mouseLocation
-            if visible.contains(mouse) {
-                anchor = NSPoint(x: mouse.x, y: mouse.y) // 未打字时跟随鼠标,输入焦点所在
-                gap = 18
-            } else {
-                let cf = InputController.latestCandidateFrame
-                anchor = (!cf.isNull && cf.width > 0)
-                    ? NSPoint(x: cf.midX, y: cf.maxY)           // 候选条上缘
-                    : NSPoint(x: visible.midX, y: visible.midY) // 屏幕中心兜底
-            }
+            let cf = InputController.latestCandidateFrame
+            anchor = (!cf.isNull && cf.width > 0)
+                ? NSPoint(x: cf.midX, y: cf.maxY)           // 候选条上缘
+                : NSPoint(x: visible.midX, y: visible.midY) // 屏幕中心兜底
         }
         var x = anchor.x - size.width / 2
         var y = anchor.y + gap // 上方

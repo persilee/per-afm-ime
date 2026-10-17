@@ -50,6 +50,12 @@ final class InputController: IMKInputController {
 
     /// ShiftModeMonitor(主线程)调用:组词中的实例先上屏拼音原文(↩ 行为,非空格选词),再切模式
     static func shiftTappedToggle() {
+        // 刷新焦点 rect: 模式提示徽标以当前输入框焦点为锚(不是鼠标/候选条)——实时查询,
+        // 避免用陈旧 caret(上次打字位置)导致提示跑偏
+        if let active = lastActive, let client = active.client() {
+            let r = Self.caretRect(client)
+            if !r.isNull { Self.latestCaret = r }
+        }
         for c in liveControllers.allObjects {
             if !c.raw.isEmpty {
                 DebugLog.log("Shift 切换 → 先上屏拼音原文 '\(c.raw)'")
