@@ -42,7 +42,13 @@ enum ShiftModeMonitor {
             guard kc == 56 || kc == 60 else { return } // 左/右 Shift
             if event.flags.contains(CGEventFlags.maskShift) {
                 shiftDown = true
-                DebugLog.log("ShiftTap: shift 按下 kc=\(kc)")
+                // 组合键判定: shift 按下瞬间若已有其他修饰键(ctrl/alt/cmd)按下,
+                // 说明是组合操作(如 shift+ctrl+alt+c),松开时绝不切换——否则 shift 非首个按下
+                // 的修饰键时(c 先按、shift 后按),期间没有带 shift 的 keyDown 置位 shiftUsed,
+                // 松开会被误判成"轻点 shift"
+                let hasOtherMods = !event.flags.intersection([.maskControl, .maskAlternate, .maskCommand]).isEmpty
+                if hasOtherMods { shiftUsed = true }
+                DebugLog.log("ShiftTap: shift 按下 kc=\(kc)\(hasOtherMods ? "(组合键,松开不切换)" : "")")
             } else if shiftDown {
                 shiftDown = false
                 if !shiftUsed {

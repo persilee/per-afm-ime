@@ -521,23 +521,34 @@ final class ModeIndicator {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.9, execute: task)
     }
 
-    /// 定位: 光标上方 12pt(优先),其次候选条上缘,兜底光标所在屏幕中心
+    /// 定位: 当前光标上方(优先,放不下翻到下方);光标不可用(未打字就切模式)时跟随鼠标位置;
+    /// 再兜底候选条上缘 → 屏幕中心。全程钳在可见区
     private func positionNearCaret(_ panel: NSPanel) {
         let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        var anchor = NSPoint(x: visible.midX, y: visible.midY)
+        let size = panel.frame.size
         let caret = InputController.latestCaret
+        var anchor: NSPoint
+        var gap: CGFloat = 12
         if !caret.isNull, caret.width > 0, caret.height > 0 {
-            anchor = NSPoint(x: caret.midX, y: caret.minY + 12)
+            anchor = NSPoint(x: caret.midX, y: caret.minY) // 光标底部(上方 gap 处)
         } else {
-            let cf = InputController.latestCandidateFrame
-            if !cf.isNull, cf.width > 0 {
-                anchor = NSPoint(x: cf.midX, y: cf.maxY + 12)
+            let mouse = NSEvent.mouseLocation
+            if visible.contains(mouse) {
+                anchor = NSPoint(x: mouse.x, y: mouse.y) // 未打字时跟随鼠标,输入焦点所在
+                gap = 18
+            } else {
+                let cf = InputController.latestCandidateFrame
+                anchor = (!cf.isNull && cf.width > 0)
+                    ? NSPoint(x: cf.midX, y: cf.maxY)           // 候选条上缘
+                    : NSPoint(x: visible.midX, y: visible.midY) // 屏幕中心兜底
             }
         }
-        let size = panel.frame.size
         var x = anchor.x - size.width / 2
-        var y = anchor.y
+        var y = anchor.y + gap // 上方
+        if y + size.height > visible.maxY - 4 { // 上方放不下 → 翻到下方
+            y = anchor.y - size.height - gap
+        }
         x = min(max(x, visible.minX + 4), visible.maxX - size.width - 4)
         y = min(max(y, visible.minY + 4), visible.maxY - size.height - 4)
         panel.setFrameOrigin(NSPoint(x: x, y: y))
