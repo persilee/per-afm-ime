@@ -38,14 +38,20 @@ public final class UserFreq {
     private var initialsIndex: [String: [(word: String, count: Int, pinyin: String)]] = [:]
     private var indexDirty = true
 
+    /// 真实拼音音节表(静态,引擎词库加载后尽早注入——须在 UserFreq.shared 首次访问前,
+    /// 补种/record/清洗全链路共用)。堵 kb27 校验漏洞: 简拼键(安师大=asd/啊的=ad)作为单个
+    /// 多字母"音节"通过 ≥2 字母检查,重建索引时其首字母("a")污染简拼索引 → 打 "a" 就把长词顶到最高档
+    public static var syllableTable: Set<String>?
+
     /// builtinWordsURL 仅测试用(nil = 从 Bundle.main Resources 找 builtin-user-words.json;
     /// 设置中心 helper bundle 也放了同款资源,先启动的是谁都完成补种)
     public init(defaults: UserDefaults = .standard, builtinWordsURL: URL? = nil) {
         self.defaults = defaults
         self.counts = defaults.dictionary(forKey: Self.storeKey) as? [String: Int] ?? [:]
         self.pinyins = defaults.dictionary(forKey: Self.pinyinStoreKey) as? [String: String] ?? [:]
-        // 迁移: 清洗历史脏键(缩写键「的=d」/半截尾音节「好下=hao x」——教训是逐音节 ≥2 字母才收)
-        let bad = pinyins.filter { !Self.isValidPinyin($0.value) }.map(\.key)
+        // 迁移: 清洗历史脏键(缩写键「的=d」/半截尾音节「好下=hao x」——教训是逐音节 ≥2 字母才收;
+        // 简拼整串键 asd/ad 由注入音节表后的 validPinyin 拦下)
+        let bad = pinyins.filter { !validPinyin($0.value) }.map(\.key)
         if !bad.isEmpty {
             for k in bad { pinyins.removeValue(forKey: k) }
             defaults.set(pinyins, forKey: Self.pinyinStoreKey)
@@ -86,6 +92,7 @@ public final class UserFreq {
         pinyins = defaults.dictionary(forKey: Self.pinyinStoreKey) as? [String: String] ?? [:]
         saveScheduled = false
         indexDirty = true
+        repairInvalidKeys() // 外部写入(设置中心导入)可能带回简拼键,同步清洗
         DebugLog.log("用户词: 收到外部变更,重读 defaults(\(counts.count) 条)")
     }
 
@@ -131,7 +138,10 @@ public final class UserFreq {
                 added += 1
                 indexDirty = true
             }
-            if pinyins[word] == nil, let p = item["pinyin"] as? String, Self.isValidPinyin(p) {
+            // 拼音: 本地缺省或无效(简拼键等非真实音节脏键)才用种子补/替换——已修复的种子
+            // 能纠正历史污染(安师大 asd → an shi da),用户的自定义读音键保持不被覆盖
+            if let p = item["pinyin"] as? String, validPinyin(p),
+               pinyins[word].map({ !validPinyin($0) }) ?? true {
                 pinyins[word] = p
                 pinyinAdded += 1
                 indexDirty = true
@@ -149,7 +159,7 @@ public final class UserFreq {
     public func record(_ word: String, pinyin: String? = nil) {
         guard !word.isEmpty, word.count <= Self.maxWordLen else { return }
         counts[word, default: 0] += 1
-        if let p = pinyin, Self.isValidPinyin(p), word.count <= 12 {
+        if let p = pinyin, validPinyin(p), word.count <= 12 {
             if pinyins[word] != p {
                 pinyins[word] = p
                 indexDirty = true
@@ -229,6 +239,32 @@ public final class UserFreq {
         guard !p.isEmpty, p.count <= 24 else { return false }
         let syls = p.split(separator: " ").map(String.init)
         return !syls.isEmpty && syls.allSatisfy { $0.count >= 2 || $0 == "a" || $0 == "o" || $0 == "e" }
+    }
+
+    /// 引擎词库加载后注入真实音节表(静态,UserFreq 单例首次访问前调用);
+    /// 注入后立即清洗存量脏键(简拼整串键 asd/ad)并持久化
+    public static func setSyllables(_ s: Set<String>) {
+        syllableTable = s
+        shared.repairInvalidKeys()
+    }
+
+    /// 拼音键最终校验: 长度规则(isValidPinyin)之上,注入音节表后还要求每个音节都是真实音节——
+    /// 简拼整串键(安师大=asd、啊的=ad)因 "asd"/"ad" 不是真实音节被拒,不再污染简拼索引
+    private func validPinyin(_ p: String) -> Bool {
+        guard Self.isValidPinyin(p) else { return false }
+        guard let syls = Self.syllableTable else { return true } // 表未注入时退化为长度规则
+        return p.split(separator: " ").allSatisfy { syls.contains(String($0)) }
+    }
+
+    /// 清洗: 移除拼音键含非真实音节的条目(保留计数——词频加成仍对词典候选生效,词本身不丢)
+    private func repairInvalidKeys() {
+        guard let syls = Self.syllableTable else { return }
+        let bad = pinyins.filter { !validPinyin($0.value) }.map(\.key)
+        guard !bad.isEmpty else { return }
+        for k in bad { pinyins.removeValue(forKey: k) }
+        defaults.set(pinyins, forKey: Self.pinyinStoreKey)
+        indexDirty = true
+        DebugLog.log("用户词: 清洗非真实拼音键 \(bad.count) 条(\(bad.prefix(5).joined(separator: "/"))…)")
     }
 
     /// 超容量时淘汰次数最低的词条

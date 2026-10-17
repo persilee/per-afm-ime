@@ -14,6 +14,7 @@ final class InputController: IMKInputController {
             return nil
         }
         DebugLog.log("词库已加载: 记录 \(store.recordCount), 音节 \(store.syllables.count)")
+        UserFreq.setSyllables(Set(store.syllables)) // 注入真实音节表: 用户词键须为真实拼音(挡简拼键污染)
         return CandidateEngine(store: store)
     }()
 
