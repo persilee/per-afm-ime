@@ -483,3 +483,99 @@ final class TranslatePanelController {
         resignObserver = nil
     }
 }
+
+// MARK: - 中英切换提示(Shift 轻点后短暂显示 中/英)
+
+/// Shift 切模式瞬态提示: 免激活液态玻璃小徽标,光标上方显示约 1 秒自动淡出。
+/// 与剪贴板面板同款焦点模型(canBecomeKey=false 纯展示),不抢焦点、不打断组词/打字。
+final class ModeIndicator {
+    private static let shared = ModeIndicator()
+    private var panel: NonKeyPanel?
+    private var hosting: NSHostingView<ModeIndicatorView>?
+    private var hideTask: DispatchWorkItem?
+
+    static func show() { shared.showInternal() }
+
+    private func showInternal() {
+        let panel = ensurePanel()
+        hosting?.rootView = ModeIndicatorView(mode: InputController.englishMode ? "英" : "中")
+        let size = hosting?.fittingSize ?? NSSize(width: 46, height: 32)
+        panel.setContentSize(size)
+        positionNearCaret(panel)
+        panel.alphaValue = 0
+        panel.orderFront(nil) // 免激活: 不抢焦点,打字/候选条原样存活
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.12
+            panel.animator().alphaValue = 1
+        }
+        hideTask?.cancel()
+        let task = DispatchWorkItem { [weak panel] in
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.18
+                panel?.animator().alphaValue = 0
+            } completionHandler: {
+                panel?.orderOut(nil)
+            }
+        }
+        hideTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9, execute: task)
+    }
+
+    /// 定位: 光标上方 12pt(优先),其次候选条上缘,兜底光标所在屏幕中心
+    private func positionNearCaret(_ panel: NSPanel) {
+        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) } ?? NSScreen.main
+        let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        var anchor = NSPoint(x: visible.midX, y: visible.midY)
+        let caret = InputController.latestCaret
+        if !caret.isNull, caret.width > 0, caret.height > 0 {
+            anchor = NSPoint(x: caret.midX, y: caret.minY + 12)
+        } else {
+            let cf = InputController.latestCandidateFrame
+            if !cf.isNull, cf.width > 0 {
+                anchor = NSPoint(x: cf.midX, y: cf.maxY + 12)
+            }
+        }
+        let size = panel.frame.size
+        var x = anchor.x - size.width / 2
+        var y = anchor.y
+        x = min(max(x, visible.minX + 4), visible.maxX - size.width - 4)
+        y = min(max(y, visible.minY + 4), visible.maxY - size.height - 4)
+        panel.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+
+    private func ensurePanel() -> NonKeyPanel {
+        if let panel { return panel }
+        let p = NonKeyPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 46, height: 32),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered, defer: false)
+        p.isOpaque = false
+        p.backgroundColor = .clear
+        p.hasShadow = true
+        p.level = .popUpMenu
+        p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        p.hidesOnDeactivate = false
+        p.becomesKeyOnlyIfNeeded = true
+        let host = NSHostingView(rootView: ModeIndicatorView(mode: "中"))
+        let glass = NSGlassEffectView()
+        glass.cornerRadius = 13
+        glass.contentView = host
+        p.contentView = glass
+        hosting = host
+        panel = p
+        return p
+    }
+}
+
+/// 「中/英」徽标内容: 字号 22 加粗,选中强调色 #ff79c6(与候选选中同色)
+private struct ModeIndicatorView: View {
+    let mode: String
+    var body: some View {
+        Text(mode)
+            .font(.system(size: 22, weight: .semibold))
+            .foregroundStyle(selectionAccent)
+            .frame(minWidth: 36, minHeight: 28)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+    }
+}

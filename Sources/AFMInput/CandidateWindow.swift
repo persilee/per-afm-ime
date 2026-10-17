@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 import IMECore
 
-/// 候选选中强调色(#ff79c6,用户指定)——幽灵行数字/水滴内高亮
-private let selectionAccent = Color(red: 1.0, green: 121.0 / 255.0, blue: 198.0 / 255.0)
+/// 候选选中强调色(#ff79c6,用户指定)——幽灵行数字/水滴内高亮/模式提示徽标共用
+let selectionAccent = Color(red: 1.0, green: 121.0 / 255.0, blue: 198.0 / 255.0)
 
 // MARK: - 候选条 SwiftUI 视图(参考 macOS 26 候选窗样式)
 //

@@ -59,6 +59,7 @@ final class InputController: IMKInputController {
         }
         englishMode.toggle()
         DebugLog.log("Shift 切换 → \(englishMode ? "英文(直通)" : "中文")模式")
+        ModeIndicator.show() // 光标上方短暂显示「中/英」徽标(免激活,不打断输入)
     }
 
     // MARK: - 组词状态
