@@ -526,7 +526,7 @@ private struct CandidateCell: View {
                 .baselineOffset(-1)
             Text(item.text)
                 .font(.system(size: CGFloat(textFontSize), weight: (active || ghost) ? .semibold : .regular))
-                .foregroundStyle(.primary)
+                .foregroundStyle((active || ghost) ? AnyShapeStyle(selectionAccent) : AnyShapeStyle(.primary))
                 .fixedSize()
                 .lineLimit(1)
         }
@@ -731,7 +731,7 @@ private struct CandidateGridView: View {
                 .baselineOffset(-1)
             Text(item.text)
                 .font(.system(size: 14, weight: item.index == selectedIndex ? .semibold : .regular))
-                .foregroundStyle(.primary)
+                .foregroundStyle(item.index == selectedIndex ? AnyShapeStyle(selectionAccent) : AnyShapeStyle(.primary))
                 .fixedSize()
                 .lineLimit(1)
         }
