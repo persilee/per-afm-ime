@@ -381,7 +381,7 @@ struct CandidateBarView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 7)
+                .padding(.vertical, 5)
             } else if let t = translation {
                 translationRow(t)
             } else if expanded {
@@ -392,7 +392,7 @@ struct CandidateBarView: View {
             }
         }
         .fixedSize(horizontal: true, vertical: false) // 防截断:按内容自然宽度撑开
-        .padding(9)
+        .padding(.horizontal, 9).padding(.vertical, 7) // 条高瘦身:垂直 9→7
         .coordinateSpace(name: "candBar") // 坐标基准 = 玻璃条内容矩形(cell/行/水滴 frame 全在此空间)
     }
 
@@ -469,7 +469,7 @@ struct CandidateBarView: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 7)
+        .padding(.vertical, 5)
     }
 
     private func expandChevron(_ symbol: String) -> some View {
@@ -531,7 +531,7 @@ private struct CandidateCell: View {
                 .lineLimit(1)
         }
         .padding(.horizontal, gridCell ? 6 : 10)
-        .padding(.vertical, gridCell ? 4 : 7)
+        .padding(.vertical, gridCell ? 4 : 5)
         .frame(minWidth: gridCell ? 62 : 0, alignment: .leading)
     }
 }
