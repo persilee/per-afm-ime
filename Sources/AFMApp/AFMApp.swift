@@ -67,6 +67,20 @@ final class AppModel: ObservableObject {
     }
     @Published var userRows: [UserRow] = []
     @Published var userMessage = ""   // 导入结果等一次性提示
+    @Published var userSearch = ""    // 用户词拼音前缀搜索
+
+    /// 用户词搜索过滤: 拼音前缀匹配(全拼去空格 / 带空格原样 / 简拼首字母缩写) + 词本身前缀;
+    /// 空搜索返回全量
+    var filteredUserRows: [UserRow] {
+        let q = userSearch.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return userRows }
+        return userRows.filter { row in
+            let key = row.pinyin.lowercased()
+            let noSpace = key.replacingOccurrences(of: " ", with: "")
+            let initials = key.split(separator: " ").map { String($0.prefix(1)) }.joined()
+            return noSpace.hasPrefix(q) || key.hasPrefix(q) || initials.hasPrefix(q) || row.word.hasPrefix(q)
+        }
+    }
 
     // 设置(键名 = UserPrefs)
     @Published var fuzzy: Bool { didSet { write("AFMFuzzyPinyin", fuzzy) } }
@@ -702,12 +716,14 @@ struct UserWordsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("共 \(model.userRows.count) 条 · 用户词处于最高优先档(用户 2 > 全键 1 > 渐进 0),打分 = 2万 + 1.5万·log10(1+次数),词频乘数 = min(1 + 0.5·log10(1+次数), ×3) 仅 ≥2 字词")
+            Text(model.userSearch.isEmpty
+                 ? "共 \(model.userRows.count) 条 · 用户词处于最高优先档(用户 2 > 全键 1 > 渐进 0),打分 = 2万 + 1.5万·log10(1+次数),词频乘数 = min(1 + 0.5·log10(1+次数), ×3) 仅 ≥2 字词"
+                 : "搜索到 \(model.filteredUserRows.count) 条(拼音前缀:全拼/简拼/词前缀)")
                 .font(.caption).foregroundStyle(.secondary)
                 .padding(.horizontal, 16).padding(.top, 8)
 
             List {
-                ForEach(model.userRows) { row in
+                ForEach(model.filteredUserRows) { row in
                     HStack(spacing: 12) {
                         Text(row.word).font(.system(size: 15, weight: .medium)).frame(minWidth: 90, alignment: .leading)
                         Text(row.pinyin).font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
@@ -742,6 +758,7 @@ struct UserWordsView: View {
                 Button { model.reloadUserRows() } label: { Label("刷新", systemImage: "arrow.clockwise") }
             }
         }
+        .searchable(text: $model.userSearch, placement: .toolbar, prompt: "拼音前缀,如 anshida / asd / 安")
         .confirmationDialog("清空全部用户词与词频?", isPresented: $model.confirmClear, titleVisibility: .visible) {
             Button("清空", role: .destructive) { model.clearUsers() }
         }
