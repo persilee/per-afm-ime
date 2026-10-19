@@ -59,9 +59,11 @@ public struct PinyinSegmenter {
                                             abbrevFlags: ab, abbrevCount: rest.abbrevCount))
                         }
                     }
-                } else if atEnd, chunk.count < 6, restList.first?.syllables.isEmpty == true,
+                } else if atEnd, chunk.count >= 2, chunk.count < 6, restList.first?.syllables.isEmpty == true,
                           syllablesSorted.contains(where: { $0.hasPrefix(chunk) }) {
-                    // 不完整尾音节: 只能是最后一块,且必须是某音节的前缀
+                    // 不完整尾音节: 只能是最后一块,且必须是某音节的前缀(≥2 字母——单字母
+                    // 是缩写语义不是"没打全",否则打 "l" 会把所有 l-开头的多音节用户词
+                    // (liang hua=量化)以最高优先档顶到首位,而期望是 了 这类单音节词)
                     if seen.insert([chunk]).inserted {
                         acc.append(Path(syllables: [chunk], partial: true, abbrevFlags: [false], abbrevCount: 0))
                     }
