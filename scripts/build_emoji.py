@@ -66,6 +66,16 @@ def main() -> None:
                 continue
             seen.add(dedup)
             lines.append(f"{cp}\t{k}\t{WEIGHT}")
+    # CLDR 注解缺的口语/常用键补充(自维护,不被下次生成覆盖)——CLDR 只给官方名词,
+    # 「赞」这类口语键没有:👍 的 zh 注解是 同意/好/手/拇指向上,用户习惯打 zan 出 👍
+    EXTRA: dict[str, list[str]] = {"👍": ["zan", "dian'zan"]}
+    for cp, extra_keys in sorted(EXTRA.items()):
+        for k in extra_keys:
+            dedup = k + "\x01" + cp
+            if dedup in seen:
+                continue
+            seen.add(dedup)
+            lines.append(f"{cp}\t{k}\t{WEIGHT}")
     with open(OUT, "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
     print(f"emoji 词库生成完成: {len(lines)} 条 → {OUT}")
